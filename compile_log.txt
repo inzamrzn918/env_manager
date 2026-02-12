@@ -1,0 +1,5 @@
+
+> env-manager@0.0.1 compile
+> tsc -p ./
+
+src/EnvDashboard.ts(3,1): error TS6133: 'Project' is declared but its value is never read.
