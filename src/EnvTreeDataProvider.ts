@@ -14,16 +14,27 @@ export class EnvNode extends vscode.TreeItem {
         super(label, collapsibleState);
 
         if (type === 'project') {
-            this.iconPath = new vscode.ThemeIcon('project');
+            this.iconPath = new vscode.ThemeIcon('folder-library', new vscode.ThemeColor('charts.blue'));
+            this.tooltip = `Project: ${label}`;
         } else if (type === 'environment') {
-            this.iconPath = new vscode.ThemeIcon('server-environment');
             const isActive = data?.isActive;
             if (isActive) {
-                this.description = '(Active)';
-                this.iconPath = new vscode.ThemeIcon('check');
+                this.description = '✓ Active';
+                this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
+                this.tooltip = `Active Environment: ${label}`;
+            } else {
+                this.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
+                this.tooltip = `Environment: ${label}`;
             }
         } else {
-            this.iconPath = new vscode.ThemeIcon('symbol-variable');
+            this.iconPath = new vscode.ThemeIcon('key', new vscode.ThemeColor('charts.yellow'));
+            // Extract key and value for better tooltip
+            const parts = label.split('=');
+            if (parts.length === 2) {
+                this.tooltip = `${parts[0]}\n${parts[1]}`;
+            } else {
+                this.tooltip = label;
+            }
         }
     }
 }
@@ -46,22 +57,32 @@ export class EnvTreeDataProvider implements vscode.TreeDataProvider<EnvNode> {
         if (!element) {
             // Root: Projects + Workspace Overrides
             const projects = this.envManager.getProjects();
-            const projectNodes = projects.map(p =>
-                new EnvNode(p.name, vscode.TreeItemCollapsibleState.Collapsed, 'project', undefined, 'project', p)
-            );
+            const projectNodes = projects.map(p => {
+                const node = new EnvNode(p.name, vscode.TreeItemCollapsibleState.Collapsed, 'project', undefined, 'project', p);
+                const envCount = p.environments.length;
+                const activeEnv = p.environments.find(e => e.id === p.activeEnvId);
+                if (activeEnv) {
+                    node.description = `${activeEnv.name} • ${envCount} env${envCount !== 1 ? 's' : ''}`;
+                } else {
+                    node.description = `${envCount} environment${envCount !== 1 ? 's' : ''}`;
+                }
+                return node;
+            });
 
             // Workspace Overrides Node
             const workspaceVars = this.envManager.getWorkspaceVariables();
             const workspaceNode = new EnvNode(
                 'Workspace Overrides',
                 vscode.TreeItemCollapsibleState.Collapsed,
-                'project', // Reusing 'project' type for icon, or create a new one
+                'project',
                 undefined,
                 'workspace-root',
                 { isWorkspace: true }
             );
-            workspaceNode.description = workspaceVars.length > 0 ? `(${workspaceVars.length})` : '(Empty)';
-            workspaceNode.iconPath = new vscode.ThemeIcon('wrench');
+            const varCount = workspaceVars.length;
+            workspaceNode.description = varCount > 0 ? `${varCount} variable${varCount !== 1 ? 's' : ''}` : 'Empty';
+            workspaceNode.iconPath = new vscode.ThemeIcon('wrench', new vscode.ThemeColor('charts.purple'));
+            workspaceNode.tooltip = `Workspace-level environment variables (${varCount})`;
 
             return Promise.resolve([...projectNodes, workspaceNode]);
         }
@@ -83,16 +104,24 @@ export class EnvTreeDataProvider implements vscode.TreeDataProvider<EnvNode> {
         if (element.type === 'project') {
             // Children: Environments
             const project = element.data as Project;
-            return Promise.resolve(project.environments.map(e =>
-                new EnvNode(
+            return Promise.resolve(project.environments.map(e => {
+                const node = new EnvNode(
                     e.name,
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'environment',
                     project.id,
                     'environment',
                     { ...e, isActive: project.activeEnvId === e.id }
-                )
-            ));
+                );
+                const varCount = e.variables.filter(v => v.enabled).length;
+                const totalVars = e.variables.length;
+                if (varCount < totalVars) {
+                    node.description = (node.description || '') + ` • ${varCount}/${totalVars} vars`;
+                } else {
+                    node.description = (node.description || '') + ` • ${varCount} var${varCount !== 1 ? 's' : ''}`;
+                }
+                return node;
+            }));
         }
 
         if (element.type === 'environment') {

@@ -24,3 +24,6 @@ export interface Project {
 // Global State Keys
 export const STORAGE_KEY_PROJECTS = 'envManager.projects';
 export const WORKSPACE_KEY_ENV_OVERRIDES = 'envManager.overrides';
+export const STORAGE_KEY_SYNC_MODE = 'envManager.syncMode';
+
+export type SyncMode = 'terminal' | 'file';

@@ -1,9 +1,9 @@
 {
-    "name": "env-manager",
-    "displayName": "Environment Manager",
+    "name": "envms-manager",
+    "displayName": "ENVSM",
     "icon": "resources/icon.png",
     "description": "Manage environment variables across multiple projects and environments.",
-    "version": "0.0.1",
+    "version": "1.0.1",
     "engines": {
         "vscode": "^1.80.0"
     },
@@ -77,6 +77,16 @@
                 "icon": "$(trash)"
             },
             {
+                "command": "env-manager.toggleSyncMode",
+                "title": "Toggle Sync Mode (Terminal/File)",
+                "icon": "$(arrow-swap)"
+            },
+            {
+                "command": "env-manager.openTerminal",
+                "title": "Open Terminal",
+                "icon": "$(terminal)"
+            },
+            {
                 "command": "env-manager.editVar",
                 "title": "Edit Variable",
                 "icon": "$(edit)"
@@ -113,9 +123,29 @@
                 {
                     "command": "env-manager.refresh",
                     "group": "navigation"
+                },
+                {
+                    "command": "env-manager.toggleSyncMode",
+                    "group": "navigation",
+                    "when": "envManager.syncMode == terminal"
+                },
+                {
+                    "command": "env-manager.toggleSyncMode",
+                    "group": "navigation",
+                    "when": "envManager.syncMode == file"
+                },
+                {
+                    "command": "env-manager.toggleSyncMode",
+                    "group": "navigation",
+                    "when": "!envManager.syncMode"
                 }
             ],
             "view/item/context": [
+                {
+                    "command": "env-manager.openTerminal",
+                    "when": "viewItem == project",
+                    "group": "inline"
+                },
                 {
                     "command": "env-manager.addEnv",
                     "when": "viewItem == project",
@@ -203,8 +233,21 @@
     "dependencies": {
         "dotenv": "^16.3.1"
     },
-    "keywords": [],
+    "keywords": [
+        "environment",
+        "env",
+        "variables",
+        "configuration",
+        "dotenv",
+        "env-manager",
+        "environment-variables"
+    ],
     "author": "",
-    "license": "ISC",
+    "license": "MIT",
+    "publisher": "inzamrzn918",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/inzamrzn918/env-manager.git"
+    },
     "type": "commonjs"
 }

@@ -177,7 +177,7 @@ export class EnvDashboard {
                 <title>Env Manager Dashboard</title>
                 <style>
                     :root {
-                        --sidebar-width: 250px;
+                        --sidebar-width: 260px;
                         --header-height: 50px;
                         --border-color: var(--vscode-panel-border);
                         --bg-sidebar: var(--vscode-sideBar-background);
@@ -186,6 +186,11 @@ export class EnvDashboard {
                         --item-active: var(--vscode-list-activeSelectionBackground);
                         --text-active: var(--vscode-list-activeSelectionForeground);
                         --color-accent: var(--vscode-activityBarBadge-background);
+                        --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+                        --shadow-md: 0 4px 6px rgba(0,0,0,0.15);
+                    }
+                    * {
+                        box-sizing: border-box;
                     }
                     body {
                         font-family: var(--vscode-font-family);
@@ -219,25 +224,31 @@ export class EnvDashboard {
                     }
                     /* Sidebar */
                     .sidebar-header {
-                        padding: 10px 15px;
-                        font-weight: bold;
+                        padding: 12px 16px;
+                        font-weight: 600;
                         text-transform: uppercase;
-                        font-size: 0.85em;
+                        font-size: 0.75em;
+                        letter-spacing: 0.5px;
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
                         border-bottom: 1px solid var(--border-color);
+                        background: rgba(0,0,0,0.05);
                     }
                     .project-list {
                         flex: 1;
                         overflow-y: auto;
+                        padding: 4px 0;
                     }
                     .project-item {
-                        padding: 8px 15px;
+                        padding: 10px 16px;
                         cursor: pointer;
                         display: flex;
                         flex-direction: column;
                         border-bottom: 1px solid transparent;
+                        transition: all 0.15s ease;
+                        margin: 2px 8px;
+                        border-radius: 4px;
                     }
                     .project-item:hover {
                         background-color: var(--item-hover);
@@ -245,42 +256,71 @@ export class EnvDashboard {
                     .project-item.selected {
                         background-color: var(--item-active);
                         color: var(--text-active);
+                        box-shadow: var(--shadow-sm);
                     }
-                    .project-name { font-weight: 600; }
-                    .project-path { font-size: 0.75em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    .project-name { 
+                        font-weight: 600; 
+                        font-size: 0.95em;
+                        margin-bottom: 4px;
+                    }
+                    .project-path { 
+                        font-size: 0.7em; 
+                        opacity: 0.6; 
+                        white-space: nowrap; 
+                        overflow: hidden; 
+                        text-overflow: ellipsis; 
+                        font-family: monospace;
+                    }
 
                     /* Main Header */
                     .main-header {
-                        padding: 15px 20px;
+                        padding: 20px 24px;
                         border-bottom: 1px solid var(--border-color);
+                        background: rgba(0,0,0,0.02);
                     }
-                    .main-title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; }
-                    .main-subtitle { font-size: 0.9em; opacity: 0.8; }
+                    .main-title { 
+                        font-size: 1.4em; 
+                        font-weight: 600; 
+                        margin-bottom: 6px;
+                    }
+                    .main-subtitle { 
+                        font-size: 0.85em; 
+                        opacity: 0.7;
+                        font-family: monospace;
+                    }
                     
                     /* Tabs */
                     .tabs {
                         display: flex;
-                        padding: 0 20px;
-                        margin-top: 15px;
+                        padding: 0 24px;
+                        margin-top: 0;
                         border-bottom: 1px solid var(--border-color);
-                        gap: 10px;
+                        gap: 4px;
+                        background: rgba(0,0,0,0.02);
                     }
                     .tab {
-                        padding: 8px 15px;
+                        padding: 10px 16px;
                         cursor: pointer;
                         border-bottom: 2px solid transparent;
-                        opacity: 0.7;
+                        opacity: 0.65;
+                        transition: all 0.2s ease;
+                        font-size: 0.9em;
+                        position: relative;
                     }
-                    .tab:hover { opacity: 1; background: var(--item-hover); }
+                    .tab:hover { 
+                        opacity: 0.9; 
+                        background: var(--item-hover);
+                    }
                     .tab.active {
                         border-bottom-color: var(--color-accent);
                         opacity: 1;
-                        font-weight: bold;
+                        font-weight: 600;
+                        background: rgba(0,0,0,0.03);
                     }
 
                     /* Content Area */
                     .content-area {
-                        padding: 20px;
+                        padding: 24px;
                         flex: 1;
                         overflow-y: auto;
                     }
@@ -288,8 +328,10 @@ export class EnvDashboard {
                     /* Variable Table */
                     .var-table-container {
                         background: var(--vscode-editor-inactiveSelectionBackground);
-                        border-radius: 4px;
+                        border-radius: 6px;
                         overflow: hidden;
+                        box-shadow: var(--shadow-sm);
+                        border: 1px solid var(--border-color);
                     }
                     .var-table {
                         width: 100%;
@@ -297,23 +339,51 @@ export class EnvDashboard {
                         font-size: 0.9em;
                     }
                     .var-table th, .var-table td {
-                        padding: 8px 12px;
+                        padding: 12px 16px;
                         text-align: left;
                         border-bottom: 1px solid var(--vscode-panel-border);
                     }
-                    .var-table th { background: rgba(0,0,0,0.1); }
-                    .var-key { font-family: monospace; font-weight: bold; color: var(--vscode-textPreformat-foreground); }
-                    .var-value { font-family: monospace; }
-                    .var-actions { text-align: right; width: 80px; }
+                    .var-table th { 
+                        background: rgba(0,0,0,0.15); 
+                        font-weight: 600;
+                        font-size: 0.85em;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    }
+                    .var-table tr:last-child td {
+                        border-bottom: none;
+                    }
+                    .var-table tr:hover {
+                        background: rgba(0,0,0,0.05);
+                    }
+                    .var-key { 
+                        font-family: 'Consolas', 'Monaco', monospace; 
+                        font-weight: 600; 
+                        color: var(--vscode-textPreformat-foreground);
+                    }
+                    .var-value { 
+                        font-family: 'Consolas', 'Monaco', monospace;
+                        opacity: 0.9;
+                    }
+                    .var-actions { 
+                        text-align: right; 
+                        width: 100px;
+                    }
                     .icon-btn { 
                         background: none; 
                         border: none; 
                         color: var(--vscode-icon-foreground); 
                         cursor: pointer; 
-                        padding: 2px 4px;
-                        opacity: 0.7;
+                        padding: 4px 6px;
+                        opacity: 0.6;
+                        transition: all 0.15s ease;
+                        border-radius: 3px;
                     }
-                    .icon-btn:hover { opacity: 1; color: var(--vscode-textLink-foreground); }
+                    .icon-btn:hover { 
+                        opacity: 1; 
+                        background: var(--item-hover);
+                        color: var(--vscode-textLink-foreground);
+                    }
                     
                     /* Project List Item Actions */
                     .project-header-row {
@@ -325,37 +395,61 @@ export class EnvDashboard {
                          display: none;
                     }
                     .project-item:hover .proj-actions {
-                        display: block;
+                        display: flex;
+                        gap: 2px;
                     }
                     
                     /* Actions */
                     .action-bar {
                         display: flex;
-                        gap: 10px;
-                        margin-bottom: 15px;
+                        gap: 12px;
+                        margin-bottom: 20px;
                         align-items: center;
                     }
                     button {
                         background: var(--vscode-button-background);
                         color: var(--vscode-button-foreground);
                         border: none;
-                        padding: 6px 12px;
+                        padding: 8px 16px;
                         cursor: pointer;
-                        border-radius: 2px;
+                        border-radius: 4px;
+                        font-size: 0.9em;
+                        font-weight: 500;
+                        transition: all 0.15s ease;
                     }
-                    button:hover { background: var(--vscode-button-hoverBackground); }
+                    button:hover { 
+                        background: var(--vscode-button-hoverBackground);
+                        box-shadow: var(--shadow-sm);
+                    }
+                    button:active {
+                        transform: translateY(1px);
+                    }
                     button.secondary {
                         background: var(--vscode-button-secondaryBackground);
                         color: var(--vscode-button-secondaryForeground);
                     }
-                    button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+                    button.secondary:hover { 
+                        background: var(--vscode-button-secondaryHoverBackground);
+                    }
+                    button:disabled {
+                        opacity: 0.5;
+                        cursor: not-allowed;
+                    }
                     
                     .soft-override-banner {
-                        margin-top: 20px;
-                        padding: 10px;
-                        background: rgba(255, 255, 0, 0.1);
+                        margin-top: 16px;
+                        padding: 12px 16px;
+                        background: rgba(255, 193, 7, 0.1);
                         border-left: 3px solid var(--vscode-charts-yellow);
-                        font-size: 0.9em;
+                        font-size: 0.85em;
+                        border-radius: 4px;
+                        line-height: 1.5;
+                    }
+                    .soft-override-banner code {
+                        background: rgba(0,0,0,0.2);
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-family: monospace;
                     }
                     .empty-state {
                         display: flex;
@@ -363,16 +457,39 @@ export class EnvDashboard {
                         align-items: center;
                         justify-content: center;
                         height: 100%;
-                        opacity: 0.6;
+                        opacity: 0.5;
+                        font-size: 1.1em;
                     }
-                    .btn-icon { padding: 2px 6px; font-size: 1.2em; }
+                    .btn-icon { 
+                        padding: 4px 8px; 
+                        font-size: 1.1em;
+                        min-width: 28px;
+                    }
                     .badge {
                         background: var(--vscode-badge-background);
                         color: var(--vscode-badge-foreground);
-                        padding: 2px 6px;
-                        border-radius: 10px;
-                        font-size: 0.7em;
-                        margin-left: 5px;
+                        padding: 2px 8px;
+                        border-radius: 12px;
+                        font-size: 0.65em;
+                        margin-left: 8px;
+                        font-weight: 600;
+                        letter-spacing: 0.3px;
+                    }
+                    
+                    /* Scrollbar Styling */
+                    ::-webkit-scrollbar {
+                        width: 10px;
+                        height: 10px;
+                    }
+                    ::-webkit-scrollbar-track {
+                        background: transparent;
+                    }
+                    ::-webkit-scrollbar-thumb {
+                        background: var(--vscode-scrollbarSlider-background);
+                        border-radius: 5px;
+                    }
+                    ::-webkit-scrollbar-thumb:hover {
+                        background: var(--vscode-scrollbarSlider-hoverBackground);
                     }
                 </style>
             </head>

@@ -3,8 +3,9 @@ import { EnvManager } from './EnvManager';
 import { EnvTreeDataProvider, EnvNode } from './EnvTreeDataProvider';
 import { EnvDashboard } from './EnvDashboard';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     const envManager = new EnvManager(context);
+    await envManager.init();
     const treeDataProvider = new EnvTreeDataProvider(envManager);
 
     vscode.window.registerTreeDataProvider('env-manager-view', treeDataProvider);
@@ -274,5 +275,62 @@ export function activate(context: vscode.ExtensionContext) {
         envManager.updateEnvironmentVariables();
         treeDataProvider.refresh();
         if (EnvDashboard.currentPanel) EnvDashboard.currentPanel.update();
+    }));
+
+    // Command: Toggle Sync Mode
+    context.subscriptions.push(vscode.commands.registerCommand('env-manager.toggleSyncMode', async () => {
+        await envManager.toggleSyncMode();
+        // We might want to update the tree view title or something to reflect mode, 
+        // but for now the message is enough. 
+        // Ideally, we could change the icon in package.json/menus via 'when' clause context,
+        // but that requires setting a context context key.
+        vscode.commands.executeCommand('setContext', 'envManager.syncMode', envManager.syncMode);
+    }));
+
+    // Set initial context
+    vscode.commands.executeCommand('setContext', 'envManager.syncMode', envManager.syncMode);
+
+    // Command: Open Terminal (Scoped)
+    context.subscriptions.push(vscode.commands.registerCommand('env-manager.openTerminal', async (node?: EnvNode) => {
+        if (!node || node.type !== 'project') return;
+        const project = node.data as any; // Import Project type ideally
+
+        // Logic:
+        // 1. Create Terminal at project path
+        // 2. If syncMode is 'terminal', inject variables.
+
+        const envOptions: vscode.TerminalOptions = {
+            cwd: project.path,
+            name: `Env: ${project.name}`,
+            hideFromUser: false
+        };
+
+        // If in Terminal Mode, we inject specifically for this terminal
+        // This is useful because we might not want to pollute the global collection/window
+        // OR the user explicitly wants a "clean" terminal with just these vars.
+
+        // Actually, if we are in Terminal Mode, the global collection is *already* polluting 
+        // (well, injecting into) new terminals. 
+        // BUT, based on user request, they might want *specific* injection for *this* project 
+        // if they are actively working on it, even if another env is "Active" globally?
+        // Let's stick to: "Inject variables of the project's ACTIVE environment".
+
+        if (envManager.syncMode === 'terminal' && project.activeEnvId) {
+            const env = project.environments.find((e: any) => e.id === project.activeEnvId);
+            if (env) {
+                const envVars: { [key: string]: string } = {};
+                // Inherit process.env? VS Code does this by default usually.
+                // We just pass the add-ons.
+                env.variables.forEach((v: any) => {
+                    if (v.enabled) {
+                        envVars[v.key] = v.value;
+                    }
+                });
+                envOptions.env = envVars;
+            }
+        }
+
+        const terminal = vscode.window.createTerminal(envOptions);
+        terminal.show();
     }));
 }

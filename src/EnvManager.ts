@@ -1,14 +1,187 @@
 import * as vscode from 'vscode';
-import { Project, Environment, EnvVariable, STORAGE_KEY_PROJECTS } from './types';
+import { Project, Environment, EnvVariable, STORAGE_KEY_PROJECTS, STORAGE_KEY_SYNC_MODE, SyncMode } from './types';
+import * as path from 'path';
 
 export class EnvManager {
     private storage: vscode.Memento;
     private context: vscode.ExtensionContext;
+    private secrets: vscode.SecretStorage;
+    private projectsCache: Project[] | undefined;
+    private _syncMode: SyncMode = 'terminal';
+
+    public get syncMode(): SyncMode {
+        return this._syncMode;
+    }
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.storage = context.globalState;
+        this.secrets = context.secrets;
+        this._syncMode = this.storage.get<SyncMode>(STORAGE_KEY_SYNC_MODE, 'terminal');
+    }
+
+    public async init() {
+        await this.loadProjects();
         this.updateEnvironmentVariables(); // Initial sync
+    }
+
+    private async loadProjects() {
+        const secretData = await this.secrets.get(STORAGE_KEY_PROJECTS);
+        if (secretData) {
+            try {
+                this.projectsCache = JSON.parse(secretData);
+            } catch {
+                this.projectsCache = [];
+            }
+        } else {
+            // Migration: Check globalState
+            const legacyData = this.storage.get<Project[]>(STORAGE_KEY_PROJECTS);
+            if (legacyData && legacyData.length > 0) {
+                this.projectsCache = legacyData;
+                // Save to secrets
+                await this.secrets.store(STORAGE_KEY_PROJECTS, JSON.stringify(this.projectsCache));
+                // Clear legacy
+                await this.storage.update(STORAGE_KEY_PROJECTS, undefined);
+                vscode.window.showInformationMessage('Migrated Env Manager data to Secure Storage.');
+            } else {
+                this.projectsCache = [];
+            }
+        }
+    }
+
+    public async toggleSyncMode() {
+        this._syncMode = this._syncMode === 'terminal' ? 'file' : 'terminal';
+        await this.storage.update(STORAGE_KEY_SYNC_MODE, this._syncMode);
+
+        if (this._syncMode === 'file') {
+            await this.syncAllActiveProjectsToFile();
+            vscode.window.showInformationMessage('Sync Mode: .env File Sync (Backups created)');
+        } else {
+            await this.revertAllActiveProjectsFromFile();
+            this.updateEnvironmentVariables(); // Re-inject terminal vars
+            vscode.window.showInformationMessage('Sync Mode: Terminal Injection (Original .env restored)');
+        }
+    }
+
+    private async syncAllActiveProjectsToFile() {
+        const projects = this.getProjects();
+        for (const project of projects) {
+            if (project.activeEnvId) {
+                await this.writeEnvFile(project);
+            }
+        }
+        // Create an empty collection effectively
+        this.context.environmentVariableCollection.clear();
+    }
+
+    private async revertAllActiveProjectsFromFile() {
+        const projects = this.getProjects();
+        for (const project of projects) {
+            await this.restoreEnvFile(project);
+        }
+    }
+
+    private async restoreEnvFile(project: Project) {
+        // Restore .env from .env.bak
+        const envPath = path.join(project.path, '.env');
+        const bakPath = path.join(project.path, '.env.bak');
+
+        try {
+            // Check if backup exists
+            try {
+                await vscode.workspace.fs.stat(vscode.Uri.file(bakPath));
+            } catch {
+                return; // No backup, nothing to restore
+            }
+
+            // Restore
+            await vscode.workspace.fs.copy(vscode.Uri.file(bakPath), vscode.Uri.file(envPath), { overwrite: true });
+            // Delete backup
+            await vscode.workspace.fs.delete(vscode.Uri.file(bakPath));
+        } catch (err) {
+            vscode.window.showErrorMessage(`Failed to restore .env file for ${project.name}: ${err}`);
+        }
+    }
+
+    private async writeEnvFile(project: Project) {
+        if (!project.activeEnvId) return;
+        const env = project.environments.find(e => e.id === project.activeEnvId);
+        if (!env) return;
+
+        const envPath = path.join(project.path, '.env');
+        const bakPath = path.join(project.path, '.env.bak');
+        const envUri = vscode.Uri.file(envPath);
+        const bakUri = vscode.Uri.file(bakPath);
+
+        try {
+            // 1. Create Backup if not exists
+            let existingContent = '';
+            try {
+                const existingData = await vscode.workspace.fs.readFile(envUri);
+                existingContent = new TextDecoder().decode(existingData);
+
+                // Check backup existence
+                try {
+                    await vscode.workspace.fs.stat(bakUri);
+                } catch {
+                    // Create backup
+                    await vscode.workspace.fs.copy(envUri, bakUri, { overwrite: false });
+                }
+            } catch {
+                // .env doesn't exist, start fresh
+                existingContent = '';
+            }
+
+            // 2. Parse and Update
+            const lines = existingContent.split(/\r?\n/);
+            const newLines: string[] = [];
+            const envVars = env.variables.filter(v => v.enabled);
+            const processedKeys = new Set<string>();
+
+            // Regex needed to handle existing lines
+            for (const line of lines) {
+                const trimmed = line.trim();
+                const match = trimmed.match(/^([^=]+)=(.*)$/);
+
+                if (match && !trimmed.startsWith('#')) {
+                    const key = match[1].trim();
+                    // Check if this key is managed by us
+                    const managedVar = envVars.find(v => v.key === key);
+
+                    if (managedVar) {
+                        // Replace value, escape quotes
+                        const escapedValue = managedVar.value.replace(/"/g, '\\"');
+                        newLines.push(`${key}="${escapedValue}"`);
+                        processedKeys.add(key);
+                    } else {
+                        // Keep original
+                        newLines.push(line);
+                    }
+                } else {
+                    // Comments or empty lines, keep them
+                    newLines.push(line);
+                }
+            }
+
+            // 3. Append new keys
+            for (const v of envVars) {
+                if (!processedKeys.has(v.key)) {
+                    // Ensure newline separation if file wasn't empty
+                    if (newLines.length > 0 && newLines[newLines.length - 1] !== '') {
+                        // Optional: could check if last line is empty
+                    }
+                    const escapedValue = v.value.replace(/"/g, '\\"');
+                    newLines.push(`${v.key}="${escapedValue}"`);
+                }
+            }
+
+            // 4. Write back
+            const newContent = newLines.join('\n');
+            await vscode.workspace.fs.writeFile(envUri, new TextEncoder().encode(newContent));
+
+        } catch (err) {
+            vscode.window.showErrorMessage(`Failed to update .env file for ${project.name}: ${err}`);
+        }
     }
 
     // --- Workspace Overrides ---
@@ -33,12 +206,25 @@ export class EnvManager {
     // --- Projects ---
 
     public getProjects(): Project[] {
-        return this.storage.get<Project[]>(STORAGE_KEY_PROJECTS, []);
+        if (!this.projectsCache) {
+            // Sync call can't await, but we should have awaited init().
+            // Ideally getProjects shouldn't contain async logic.
+            // If cache is empty, return empty or throw error if not init?
+            // Assuming init call in activate ensures this is populated.
+            return [];
+        }
+        return this.projectsCache!;
     }
 
     public async saveProjects(projects: Project[]) {
-        await this.storage.update(STORAGE_KEY_PROJECTS, projects);
-        this.updateEnvironmentVariables();
+        this.projectsCache = projects;
+        await this.secrets.store(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+
+        if (this._syncMode === 'file') {
+            await this.syncAllActiveProjectsToFile();
+        } else {
+            this.updateEnvironmentVariables();
+        }
     }
 
     public async addProject(name: string, projectPath: string, envFilePath?: string) {
@@ -169,8 +355,14 @@ export class EnvManager {
         if (!project) return;
 
         project.activeEnvId = envId;
+
+        // Important: Save calls saveProjects which handles sync based on mode.
+        // But for feedback, we might want to know.
+
         await this.saveProjects(projects);
-        vscode.window.showInformationMessage(`Active environment for ${project.name} set to ${envId}`);
+
+        const modeMsg = this._syncMode === 'file' ? 'Updated .env file' : 'Updated Terminal Environment';
+        vscode.window.showInformationMessage(`Active environment set to ${envId}. (${modeMsg})`);
     }
 
     public async addVariable(projectId: string, envId: string, key: string, value: string) {
@@ -218,7 +410,13 @@ export class EnvManager {
         // Clear all previously set variables by this extension
         this.context.environmentVariableCollection.clear();
 
-        const projects: Project[] = this.storage.get(STORAGE_KEY_PROJECTS, []);
+        // If in FILE mode, we do NOT inject into terminal collection globally.
+        if (this._syncMode === 'file') {
+            return;
+        }
+
+        // Use cached projects directly here for speed
+        const projects: Project[] = this.getProjects();
 
         if (!vscode.workspace.workspaceFolders) {
             return;
