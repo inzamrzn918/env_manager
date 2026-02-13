@@ -33,12 +33,13 @@ jobs:
     - name: Package extension
       run: vsce package
     
+    - name: Get package name
+      id: package
+      run: echo "vsix=$(ls *.vsix)" >> $GITHUB_OUTPUT
+    
     - name: Upload VSIX to release
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ steps.package.outputs.vsix }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./env-manager-${{ github.event.release.tag_name }}.vsix
-        asset_name: env-manager-${{ github.event.release.tag_name }}.vsix
-        asset_content_type: application/zip
