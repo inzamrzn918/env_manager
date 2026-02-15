@@ -3,7 +3,7 @@
     "displayName": "ENVSM",
     "icon": "resources/icon.png",
     "description": "Manage environment variables across multiple projects and environments.",
-    "version": "1.0.1",
+    "version": "1.0.12",
     "engines": {
         "vscode": "^1.80.0"
     },
